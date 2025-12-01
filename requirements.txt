@@ -1,0 +1,11 @@
+langchain-openai
+langgraph
+langchain-core
+python-dotenv
+httpx
+uvicorn
+starlette
+sse-starlette
+a2a-sdk[http-server]
+pyjwt
+cryptography

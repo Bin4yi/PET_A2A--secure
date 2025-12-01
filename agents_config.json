@@ -1,0 +1,24 @@
+{
+  "agents": [
+    {
+      "url": "http://localhost:10005",
+      "enabled": true,
+      "name": "Pet Vaccination Assistant",
+      "application_id": "V5fehG024xohBqIuHzYWP7c59CEa",
+      "required_scope": "vaccination:read"
+    },
+    {
+      "url": "http://localhost:10006",
+      "enabled": true,
+      "name": "Pet Appointment Scheduler",
+      "application_id": "GBuclOn0Oi68n8JF66f1Cq0WSrsa",
+      "required_scope": "appointments:read"
+    }
+  ],
+  "orchestrator": {
+    "llm_model": "gpt-4o",
+    "llm_temperature": 0.7,
+    "application_id": "6GcGVxi3GxDzmAFf756MwGzmuz8a",
+    "master_scopes": "vaccination:read appointments:read openid profile"
+  }
+}
