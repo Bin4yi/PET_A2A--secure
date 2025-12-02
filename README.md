@@ -103,7 +103,7 @@ Once the application is created, get both the **Client ID** and **Tenant Name**:
 1. Login to your **Asgardeo** account at [https://console.asgardeo.io](https://console.asgardeo.io)
 2. Navigate to the **Applications** tab and select **MCP Client Application** template
 
-   ![MCP Client App Selection](images/mcp-client-app-selection.png)
+
 
 3. Configure your application:
    - **Application Name**: Pawsome Pet Care MCP
@@ -111,7 +111,7 @@ Once the application is created, get both the **Client ID** and **Tenant Name**:
      - For MCP Inspector: `http://localhost:6274/oauth/callback`
      - For the agent: `http://localhost:8080/callback`
 
-   ![MCP Client Creation](images/mcp-client-creation.png)
+
 
 ### 2. Get Your Application Credentials
 
@@ -227,14 +227,13 @@ Open `http://localhost:8080` in your browser to interact with the chatbot.
      - **URL**: `http://localhost:8000/mcp`
      - **Auth**: OAuth2 with Asgardeo settings
 
-   ![MCP Auth Configs](images/mcp-auth-configs.png)
 
 4. **Test Authentication**:
    - Click **Connect**
    - You'll be redirected to Asgardeo for login
    - After successful authentication, you can test the tools
 
-   ![MCP Server Connect](images/mcp-server-connect.png)
+  
 
 ## Sample Conversation Flows
 
