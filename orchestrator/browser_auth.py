@@ -106,7 +106,7 @@ class BrowserAuthenticator:
         self.client_id = client_id
         self.client_secret = client_secret
         self.redirect_uri = redirect_uri
-        self.scope = scope
+        self.scope = scope or "openid profile vaccination:read appointments:read"
         self.api_resource_identifier = api_resource_identifier
         
         self._access_token: Optional[str] = None
@@ -149,7 +149,7 @@ class BrowserAuthenticator:
         
         # Step 1: Get actor_token for the agent
         print(f"\n📍 Step 1: Obtaining actor_token for agent {actor_client_id[:15]}...")
-        actor_token = await self._get_actor_token(actor_client_id, actor_client_secret)
+        actor_token = await self._get_actor_token(actor_client_id, actor_client_secret, requested_scope)
         print(f"  ✓ Actor token obtained: {actor_token[:30]}...")
         
         # Step 2: Get authorization code with requested_actor
@@ -175,21 +175,43 @@ class BrowserAuthenticator:
         
         return delegated_token
     
-    async def _get_actor_token(self, client_id: str, client_secret: str) -> str:
-        """Get actor_token for an agent using client credentials."""
+    async def _get_actor_token(self, client_id: str, client_secret: str, scope: str) -> str:
+        """Get actor_token for an agent using client credentials with JWT assertion."""
+        import jwt
+        import time
+        
         async with httpx.AsyncClient() as client:
-            credentials = f"{client_id}:{client_secret}"
-            encoded_credentials = base64.b64encode(credentials.encode()).decode()
+            # Create JWT assertion
+            # For Asgardeo, the aud should be the token issuer (without /token endpoint)
+            now = int(time.time())
+            token_issuer = self.token_url.replace('/token', '')
+            
+            jwt_payload = {
+                'iss': client_id,
+                'sub': client_id,
+                'aud': token_issuer,  # Use issuer URL, not token endpoint
+                'exp': now + 300,  # 5 minutes expiration
+                'iat': now,
+                'jti': secrets.token_urlsafe(16)
+            }
+            
+            client_assertion = jwt.encode(jwt_payload, client_secret, algorithm='HS256')
+            
+            # Ensure scope includes openid
+            scopes = set(scope.split())
+            # scopes.add('openid')
+            combined_scope = ' '.join(scopes)
             
             response = await client.post(
                 self.token_url,
                 data={
                     'grant_type': 'client_credentials',
-                    'scope': 'openid'
+                    'scope': combined_scope,
+                    'client_assertion_type': 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+                    'client_assertion': client_assertion
                 },
                 headers={
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Authorization': f'Basic {encoded_credentials}'
+                    'Content-Type': 'application/x-www-form-urlencoded'
                 }
             )
             
@@ -277,7 +299,7 @@ class BrowserAuthenticator:
                 'code': auth_code,
                 'redirect_uri': self.redirect_uri,
                 'code_verifier': code_verifier,
-                'actor_token': actor_token,  # Actor token as form parameter!
+                'actor_token': actor_token,
                 'actor_token_type': 'urn:ietf:params:oauth:token-type:access_token'
             }
             
@@ -340,7 +362,8 @@ class BrowserAuthenticator:
             'scope': self.scope,
             'state': state,
             'code_challenge': code_challenge,
-            'code_challenge_method': 'S256'
+            'code_challenge_method': 'S256',
+            'resource': self.api_resource_identifier
         }
         
         # Add resource parameter if API Resource identifier is configured
@@ -411,6 +434,7 @@ class BrowserAuthenticator:
                 'code': CallbackHandler.authorization_code,
                 'redirect_uri': self.redirect_uri,
                 'code_verifier': code_verifier,
+                'resource': self.api_resource_identifier,
             }
             
             # Add resource parameter if API Resource identifier is configured

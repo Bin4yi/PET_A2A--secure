@@ -32,8 +32,7 @@ from langgraph.prebuilt import create_react_agent
 # Asgardeo Authentication & Token Exchange
 from token_exchange import (
     create_token_exchanger_from_env,
-    get_vaccination_agent_config,
-    get_appointments_agent_config
+    AgentConfig
 )
 
 # Load environment variables (OPENAI_API_KEY, ASGARDEO credentials, etc.)
@@ -57,6 +56,117 @@ AGENT_CONFIGS = {}
 
 # Cache for delegated tokens (agent_name -> delegated_access_token)
 DELEGATED_TOKENS = {}
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def derive_env_var_name(agent_name: str, suffix: str) -> str:
+    """
+    Derive environment variable name from agent name dynamically.
+    
+    Extracts significant words from agent name and converts to uppercase.
+    Examples:
+        "Pet Vaccination Assistant" + "_APP_SECRET" -> "VACCINATION_APP_SECRET"
+        "Weather Forecast Service" + "_APP_ID" -> "WEATHER_APP_ID"
+        "Customer Support Bot" + "_APP_SECRET" -> "CUSTOMER_APP_SECRET"
+    
+    Args:
+        agent_name: Full agent name from agent card
+        suffix: Suffix to append (e.g., "_APP_SECRET", "_APP_ID", "_REQUIRED_SCOPE")
+        
+    Returns:
+        Derived environment variable name
+    """
+    # Common filler words to ignore (can work with any domain)
+    ignore_words = {
+        'the', 'a', 'an', 'and', 'or', 'but', 'for', 'of', 'to', 'in', 'on', 'at',
+        'assistant', 'agent', 'service', 'helper', 'bot', 'system', 'manager',
+        'handler', 'processor', 'worker', 'server', 'client', 'api',
+        'pet', 'pets'  # Domain-specific filler words
+    }
+    
+    # Extract meaningful words from agent name
+    words = agent_name.split()
+    significant_words = [word for word in words if word.lower() not in ignore_words]
+    
+    # Use first significant word as the key term
+    if significant_words:
+        key_term = significant_words[0].upper()
+    else:
+        # Fallback: use first word if all are ignored
+        key_term = words[0].upper()
+    
+    return f"{key_term}{suffix}"
+
+
+def get_agent_config_from_env(agent_name: str) -> tuple:
+    """
+    Dynamically discover agent configuration from environment variables.
+    
+    Tries multiple naming patterns to find APP_ID, APP_SECRET, and REQUIRED_SCOPE.
+    Works with any agent name without prior knowledge of what agents exist.
+    
+    Args:
+        agent_name: Full agent name from agent card
+        
+    Returns:
+        Tuple of (app_id, app_secret, required_scope, env_vars_tried) 
+        or (None, None, None, []) if not found
+    """
+    # Generate multiple possible environment variable patterns
+    patterns = []
+    
+    # Pattern 1: First significant word (e.g., "VACCINATION_APP_ID")
+    primary_pattern = derive_env_var_name(agent_name, "")
+    patterns.append(primary_pattern)
+    
+    # Pattern 2: All significant words concatenated (e.g., "VACCINATION_ASSISTANT_APP_ID")
+    ignore_words = {
+        'the', 'a', 'an', 'and', 'or', 'but', 'for', 'of', 'to', 'in', 'on', 'at',
+        'assistant', 'agent', 'service', 'helper', 'bot', 'system', 'manager',
+        'pet', 'pets'  # Domain-specific filler words
+    }
+    words = agent_name.split()
+    significant_words = [w.upper() for w in words if w.lower() not in ignore_words]
+    if len(significant_words) > 1:
+        combined = "_".join(significant_words)
+        patterns.append(combined)
+    
+    # Pattern 3: Full name converted to snake_case (e.g., "PET_VACCINATION_ASSISTANT_APP_ID")
+    full_snake = "_".join(word.upper() for word in words)
+    patterns.append(full_snake)
+    
+    # Pattern 4: Handle specific aliases (Clinic/Scheduler -> APPOINTMENTS)
+    if any(word in agent_name.lower() for word in ['clinic', 'scheduler', 'appointment']):
+        patterns.insert(0, 'APPOINTMENTS')  # Try this first
+    
+    # Try each pattern to find configuration
+    tried_vars = []
+    for pattern in patterns:
+        app_id_var = f"{pattern}_APP_ID"
+        app_secret_var = f"{pattern}_APP_SECRET"
+        scope_var = f"{pattern}_REQUIRED_SCOPE"
+        
+        tried_vars.extend([app_id_var, app_secret_var, scope_var])
+        
+        # Get values from environment
+        app_id = os.getenv(app_id_var, '')
+        app_secret = os.getenv(app_secret_var, '')
+        required_scope = os.getenv(scope_var, '')
+        
+        # Validate values (check if not placeholder)
+        def is_valid(value):
+            return value and '<' not in value and '>' not in value
+        
+        if is_valid(app_id):
+            # Found valid configuration with this pattern
+            app_secret = app_secret if is_valid(app_secret) else None
+            required_scope = required_scope if is_valid(required_scope) else None
+            return app_id, app_secret, required_scope, [app_id_var, app_secret_var, scope_var]
+    
+    # No valid configuration found
+    return None, None, None, list(set(tried_vars))
 
 # ============================================================================
 # TOOL DEFINITION - Communication Bridge
@@ -237,20 +347,10 @@ async def main():
         USER_AUTHENTICATOR = create_browser_authenticator_from_env()
         TOKEN_EXCHANGER = create_token_exchanger_from_env()
         
-        # Register agent configurations (with secrets for OAuth Extension)
-        AGENT_CONFIGS["Pet Vaccination Assistant"] = get_vaccination_agent_config()
-        AGENT_CONFIGS["Pet Clinic Scheduler"] = get_appointments_agent_config()
-        
         print("\n✓ Authentication system initialized")
         print("  - User Authentication: Enabled (Browser Login)")
         print("  - Token Delegation: Enabled (OAuth Extension for AI Agents)")
-        
-        # Show which agents have credentials configured
-        for name, config in AGENT_CONFIGS.items():
-            if config.has_credentials():
-                print(f"  - {name}: Credentials configured ✓")
-            else:
-                print(f"  - {name}: Credentials NOT configured (will use fallback)")
+        print("  - Agent configurations will be discovered dynamically from agent cards")
         
     except Exception as e:
         print(f"\n⚠️  Authentication initialization failed: {e}")
@@ -360,22 +460,51 @@ async def main():
                     "url": url         # Base URL of the agent
                 }
                 
-                # Extract Asgardeo security metadata from agent card if available
+                # Extract or derive Asgardeo security configuration
+                app_id = None
+                app_secret = None
+                required_scope = None
+                config_source = "none"
+                env_vars_tried = []
+                
+                # Strategy 1: Try to get from agent card metadata
                 if hasattr(card, 'metadata') and card.metadata and 'asgardeo' in card.metadata:
                     asgardeo_meta = card.metadata['asgardeo']
                     app_id = asgardeo_meta.get('application_id')
-                    app_secret = asgardeo_meta.get('application_secret', '')
                     required_scope = asgardeo_meta.get('required_scope')
+                    if app_id:
+                        config_source = "agent card"
+                
+                # Strategy 2: Discover from environment variables (tries multiple naming patterns)
+                if not app_id:
+                    app_id, app_secret, env_scope, env_vars_tried = get_agent_config_from_env(card.name)
+                    if app_id:
+                        config_source = "environment"
+                        if not required_scope:
+                            required_scope = env_scope
+                
+                # Get secret if not already retrieved
+                if app_id and not app_secret:
+                    _, app_secret, _, _ = get_agent_config_from_env(card.name)
+                
+                # Create agent config if we have minimum required info
+                if app_id and required_scope:
+                    AGENT_CONFIGS[card.name] = AgentConfig(
+                        name=card.name,
+                        app_id=app_id,
+                        app_secret=app_secret or '',
+                        required_scope=required_scope
+                    )
                     
-                    if app_id and required_scope:
-                        from token_exchange import AgentConfig
-                        AGENT_CONFIGS[card.name] = AgentConfig(
-                            name=card.name,
-                            app_id=app_id,
-                            app_secret=app_secret,
-                            required_scope=required_scope
-                        )
-                        print(f"    Security: App ID={app_id[:20]}..., Scope={required_scope}")
+                    secret_status = "✓" if app_secret else "✗"
+                    print(f"    Security: App ID={app_id[:15]}..., Scope={required_scope}, Secret={secret_status}")
+                    print(f"    Source: {config_source}")
+                else:
+                    print(f"    Security: ⚠️  No configuration found (token exchange will be disabled)")
+                    if env_vars_tried:
+                        # Show first few attempted patterns for debugging
+                        sample_vars = env_vars_tried[:3]
+                        print(f"    Tried patterns: {', '.join(sample_vars)}...")
                 
                 print(f"  ✓ Found: '{card.name}' at {url}")
                 

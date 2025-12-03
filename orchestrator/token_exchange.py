@@ -99,61 +99,58 @@ class TokenExchanger:
         self._display_token_claims(master_token, "Master Token")
         
         async with httpx.AsyncClient() as client:
-            # Get actor token for the agent (proves agent identity)
-            print(f"\n📍 Step 1: Getting actor token for agent...")
+            # Get agent credentials
+            print(f"\n📍 Token exchange request...")
             agent_secret = self._get_agent_secret(agent_name)
             
             if not agent_secret:
                 raise Exception(f"No client secret configured for {agent_name}. "
                               f"Please set the appropriate APP_SECRET in .env")
             
-            actor_token = await self._get_actor_token(agent_client_id, agent_secret)
-            
-            # Build token exchange request
-            print(f"\n📍 Step 2: Token exchange request...")
-            
-            # Format scope with API Resource identifier if configured
-            formatted_scope = required_scope
+            # Format scope - include API resource prefix for proper claim mapping
             if self.api_resource_identifier:
-                # Use full identifier format: {identifier}/{scope}
-                # We also prepend 'openid' as it is often required for the token exchange to return a valid ID token/claims
-                formatted_scope = f"openid {self.api_resource_identifier}/{required_scope}"
-                print(f"  Using API Resource identifier: {self.api_resource_identifier}")
+                # Use API resource format: https://api.petclinic.com/vaccination:read
+                # formatted_scope = f"openid {self.api_resource_identifier}/{required_scope}"
+                formatted_scope = f"openid {required_scope}"
+            else:
+                # Fallback to simple scope format
+                formatted_scope = f"openid {required_scope}"
             
-            # RFC 8693 Token Exchange with Trusted Token Issuer
-            # Key: use 'jwt' token type for trusted issuer flow
+            # RFC 8693 Token Exchange with API Resource audience
             exchange_data = {
-                'grant_type': 'urn:ietf:params:oauth:grant-type:token-exchange',
-                'subject_token': master_token,
-                'subject_token_type': 'urn:ietf:params:oauth:token-type:jwt',
-                'requested_token_type': 'urn:ietf:params:oauth:token-type:access_token',
-                'scope': formatted_scope
+                "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+                "subject_token": master_token,
+                "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+                "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
+                "scope": formatted_scope,
+                "audience": agent_client_id,  # Agent's client ID as audience
+                "requested_scope": required_scope  # Explicitly request the specific scope
             }
             
-            # Add audience parameter to target the API Resource
-            # This ensures the token's aud claim matches the API Resource that owns the scope
+            # Add resource parameter if API Resource is configured
             if self.api_resource_identifier:
-                exchange_data['audience'] = self.api_resource_identifier
-                exchange_data['resource'] = self.api_resource_identifier
-                print(f"  audience: {self.api_resource_identifier}")
+                exchange_data["resource"] = self.api_resource_identifier
+                print(f"  API Resource: {self.api_resource_identifier}")
             
             print(f"  grant_type: token-exchange")
             print(f"  subject_token: <master_token>")
             print(f"  subject_token_type: jwt")
             print(f"  scope: {formatted_scope}")
-            
-            # Use AGENT's credentials for authentication
+            print(f"  audience: {agent_client_id}")
+
+            # Use agent's credentials for Basic Auth 
             credentials = f"{agent_client_id}:{agent_secret}"
             encoded_credentials = base64.b64encode(credentials.encode()).decode()
-            
+
             response = await client.post(
                 self.token_exchange_url,
                 data=exchange_data,
                 headers={
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Authorization': f'Basic {encoded_credentials}'
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Authorization": f"Basic {encoded_credentials}"
                 }
             )
+
             
             print(f"\n  📥 Response Status: {response.status_code}")
             
@@ -195,25 +192,49 @@ class TokenExchanger:
             
             return delegated_token
     
-    async def _get_actor_token(self, agent_client_id: str, agent_client_secret: str) -> str:
-        """Get agent's actor token using client credentials grant."""
+    async def _get_actor_token(self, agent_client_id: str, agent_client_secret: str, scope: str = "openid") -> str:
+        """Get agent's actor token using client credentials grant with JWT assertion."""
+        import jwt
+        import secrets
+        
         async with httpx.AsyncClient() as client:
-            credentials = f"{agent_client_id}:{agent_client_secret}"
-            encoded_credentials = base64.b64encode(credentials.encode()).decode()
+            # Create JWT assertion
+            # For Asgardeo, the aud should be the token issuer (without /token endpoint)
+            now = int(time.time())
+            token_issuer = self.token_exchange_url.replace('/token', '')
+            
+            jwt_payload = {
+                'iss': agent_client_id,
+                'sub': agent_client_id,
+                'aud': token_issuer,  # Use issuer URL, not token endpoint
+                'exp': now + 300,  # 5 minutes expiration
+                'iat': now,
+                'jti': secrets.token_urlsafe(16)
+            }
+            
+            client_assertion = jwt.encode(jwt_payload, agent_client_secret, algorithm='HS256')
+            
+            # Ensure scope includes openid
+            scopes = set(scope.split())
+            scopes.add('openid')
+            combined_scope = ' '.join(scopes)
             
             token_data = {
                 'grant_type': 'client_credentials',
-                'scope': 'openid'
+                'scope': combined_scope,
+                'client_assertion_type': 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+                'client_assertion': client_assertion
             }
             
             print(f"  🤖 Requesting actor token for agent {agent_client_id[:15]}...")
+            print(f"     Scope: {combined_scope}")
+            print(f"     JWT aud: {token_issuer}")
             
             response = await client.post(
                 self.token_exchange_url,
                 data=token_data,
                 headers={
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Authorization': f'Basic {encoded_credentials}'
+                    'Content-Type': 'application/x-www-form-urlencoded'
                 }
             )
             
