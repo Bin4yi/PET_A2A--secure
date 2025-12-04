@@ -271,24 +271,36 @@ async def talk_to_agent(agent_name: str, content: str) -> str:
         # ====================================================================
         # STEP 4: Send Message with Agent Token via A2A Protocol
         # ====================================================================
-        # If we have an agent-specific token, override the Authorization header
+        # If we have an agent-specific token, use it for the request
         if agent_token:
-            # Create temporary client with agent-specific token
-            temp_client = httpx.AsyncClient()
-            temp_client.headers['Authorization'] = f'Bearer {agent_token}'
+            # Create httpx client with Authorization header properly set in constructor
+            # This is the standard way - headers must be set when creating the client
+            temp_client = httpx.AsyncClient(
+                headers={'Authorization': f'Bearer {agent_token}'},
+                timeout=30.0
+            )
             
-            # Create new A2A client with this token
+            print(f"\n📤 Preparing to send message to {agent_name}")
+            print(f"   Token preview: {agent_token[:30]}...")
+            print(f"   Headers set: {dict(temp_client.headers)}")
+            
+            # Create A2A client with the authenticated httpx client
+            # The JsonRpcTransport will use this client's headers for all requests
             auth_client = A2AClient(
                 httpx_client=temp_client,
                 agent_card=agent_data['card']
             )
             
-            print(f"📤 Sending message to {agent_name} with restricted token")
-            response = await auth_client.send_message(request)
+            print(f"   Sending request via A2A protocol...")
             
-            await temp_client.aclose()
+            try:
+                response = await auth_client.send_message(request)
+                print(f"✅ Received response from {agent_name}")
+            finally:
+                await temp_client.aclose()
         else:
-            # Use default client (client credentials flow)
+            # Use default client (no authentication)
+            print(f"⚠️  No delegated token available, sending without authentication")
             response = await client.send_message(request)
         # ====================================================================
         
@@ -384,19 +396,19 @@ async def main():
     # ========================================================================
     # STEP 3: Load Agent Configuration from File
     # ========================================================================
-    # Read agents_config.json to get list of agents to discover
+    # Read config.json to get list of agents to discover
     # This allows easy modification of agents without changing code
-    config_path = os.path.join(os.path.dirname(__file__), "..", "agents_config.json")
+    config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config.json")
     
     try:
         with open(config_path, 'r') as f:
             config = json.load(f)
         
-        # Extract enabled agents only
+        # Extract enabled service agents only (exclude orchestrator)
         candidate_urls = [
-            agent["url"] 
+            f"http://{agent['host']}:{agent['port']}"
             for agent in config["agents"] 
-            if agent.get("enabled", True)
+            if agent.get("enabled", True) and agent.get("type") == "service"
         ]
         
         print(f"Loaded configuration: {len(candidate_urls)} agents enabled")
@@ -559,8 +571,13 @@ Instructions:
         print(f"{'='*70}")
         
         # Load LLM configuration from config file (with fallback to defaults)
-        llm_model = config.get("orchestrator", {}).get("llm_model", "gpt-4o")
-        llm_temperature = config.get("orchestrator", {}).get("llm_temperature", 0.7)
+        orchestrator_config = next(
+            (agent for agent in config.get("agents", []) if agent.get("name") == "orchestrator"),
+            {}
+        )
+        llm_config = orchestrator_config.get("llm", {})
+        llm_model = llm_config.get("model", "gpt-4o")
+        llm_temperature = llm_config.get("temperature", 0.7)
         
         # Create LLM instance (GPT from OpenAI)
         # temperature controls randomness in responses (0 = deterministic, 1 = creative)

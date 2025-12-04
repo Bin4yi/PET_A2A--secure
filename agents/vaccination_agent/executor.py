@@ -23,7 +23,7 @@ from a2a.utils import (
 from a2a.utils.errors import ServerError
 
 # Import the business logic (the "brain" of the agent)
-from agent_with_token import PetVaccinationAgentWithToken as PetVaccinationAgent
+from agent import PetVaccinationAgent
 
 class PetVaccinationAgentExecutor(AgentExecutor):
     """
@@ -37,10 +37,15 @@ class PetVaccinationAgentExecutor(AgentExecutor):
     - Manages task lifecycle (created → in-progress → completed)
     """
 
-    def __init__(self):
-        """Initialize the executor with the agent logic."""
+    def __init__(self, config: dict):
+        """
+        Initialize the executor with the agent logic.
+        
+        Args:
+            config: Agent configuration from config.json
+        """
         # Create an instance of the vaccination agent (contains the business logic)
-        self.agent = PetVaccinationAgent()
+        self.agent = PetVaccinationAgent(config)
 
     async def execute(
         self,

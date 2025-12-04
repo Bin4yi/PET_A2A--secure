@@ -1,0 +1,68 @@
+{
+  "agents": [
+    {
+      "name": "orchestrator",
+      "type": "orchestrator",
+      "enabled": true,
+      "host": "localhost",
+      "port": 8000,
+      "application_id": "6GcGVxi3GxDzmAFf756MwGzmuz8a",
+      "master_scopes": "vaccination:read appointments:read openid profile",
+      "llm": {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "temperature": 0.7
+      },
+      "logging": {
+        "level": "INFO"
+      }
+    },
+    {
+      "name": "vaccination_agent",
+      "type": "service",
+      "enabled": true,
+      "host": "localhost",
+      "port": 10005,
+      "application_id": "V5fehG024xohBqIuHzYWP7c59CEa",
+      "required_scope": "vaccination:read",
+      "llm": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "temperature": 0.5
+      },
+      "logging": {
+        "level": "INFO"
+      },
+      "description": "Pet Vaccination Assistant - Provides vaccination schedules and requirements for various pets"
+    },
+    {
+      "name": "appointments_agent",
+      "type": "service",
+      "enabled": true,
+      "host": "localhost",
+      "port": 10006,
+      "application_id": "GBuclOn0Oi68n8JF66f1Cq0WSrsa",
+      "required_scope": "appointments:read",
+      "llm": {
+        "provider": "openai",
+        "model": "gpt-3.5-turbo",
+        "temperature": 0.7
+      },
+      "logging": {
+        "level": "INFO"
+      },
+      "description": "Pet Appointment Scheduler - Manages appointment bookings and veterinarian availability"
+    }
+  ],
+  "asgardeo": {
+    "token_url": "https://api.asgardeo.io/t/pasansanjiiwa/oauth2/token",
+    "authorize_url": "https://api.asgardeo.io/t/pasansanjiiwa/oauth2/authorize",
+    "jwks_url": "https://api.asgardeo.io/t/pasansanjiiwa/oauth2/jwks",
+    "issuer": "https://api.asgardeo.io/t/pasansanjiiwa",
+    "api_resource_identifier": "https://api.petclinic.com"
+  },
+  "global": {
+    "log_level": "INFO",
+    "log_format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  }
+}

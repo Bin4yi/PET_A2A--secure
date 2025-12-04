@@ -176,20 +176,34 @@ class AsgardeoJWTMiddleware(BaseHTTPMiddleware):
             # - Signature is valid (token not tampered with)
             # - Token is not expired
             # - Issuer matches expected value
-            # - Audience matches agent ID OR API Resource identifier
+            # Note: We'll validate audience manually since we accept multiple valid audiences
+            
+            # First decode without verification to see the issuer
+            unverified_payload = jwt.get_unverified_claims(token)
+            token_issuer = unverified_payload.get('iss', 'MISSING')
+            
+            print(f"[Auth] Token issuer: {token_issuer}")
+            print(f"[Auth] Expected issuer: {self.issuer}")
+            
             payload = jwt.decode(
                 token,
                 rsa_key,
                 algorithms=['RS256'],
                 issuer=self.issuer,
-                audience=self.valid_audiences,  # Accept multiple valid audiences
                 options={
                     'verify_signature': True,
                     'verify_exp': True,
                     'verify_iss': True,
-                    'verify_aud': True,  # Audience verification enabled
+                    'verify_aud': False,  # We'll validate audience manually
                 }
             )
+            
+            # ================================================================
+            # STEP 5: Manually validate audience (support multiple valid audiences)
+            # ================================================================
+            token_audience = payload.get('aud')
+            if self.valid_audiences and token_audience not in self.valid_audiences:
+                raise JWTError(f"Invalid audience. Expected one of {self.valid_audiences}, got {token_audience}")
             
             return payload
             
@@ -277,6 +291,7 @@ class AsgardeoJWTMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
             
         except JWTError as e:
+            print(f"[Auth] ❌ Token validation failed: {str(e)}")
             return JSONResponse(
                 status_code=401,
                 content={

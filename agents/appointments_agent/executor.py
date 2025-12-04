@@ -16,8 +16,8 @@ from a2a.utils import (
 )
 from a2a.utils.errors import ServerError
 
-# Import the NEW appointment agent logic
-from agent_with_token import AppointmentAgentWithToken as AppointmentAgent
+# Import the appointment agent logic
+from agent import AppointmentAgent
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,8 +25,14 @@ logger = logging.getLogger(__name__)
 class AppointmentAgentExecutor(AgentExecutor):
     """Executor for the Pet Appointment Agent."""
 
-    def __init__(self):
-        self.agent = AppointmentAgent()
+    def __init__(self, config: dict):
+        """
+        Initialize the executor with the agent logic.
+        
+        Args:
+            config: Agent configuration from config.json
+        """
+        self.agent = AppointmentAgent(config)
 
     async def execute(
         self,

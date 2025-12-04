@@ -1,371 +1,338 @@
-# Pawsome Pet Care - AI-Powered Veterinary Assistant with Asgardeo Authentication
+# 🐾 Pet Care Multi-Agent System with Asgardeo Authentication
 
-This project demonstrates a sophisticated AI-powered pet care chatbot system that integrates a secured MCP (Model Context Protocol) server with an intelligent LangGraph agent, using **Asgardeo** as the OAuth2/OIDC provider for authentication and authorization.
+A sophisticated multi-agent orchestration system for pet care services, featuring secure OAuth 2.0 token exchange via Asgardeo, LLM-powered agents, and intelligent request routing.
 
-## 🌟 Key Features
+## 🌟 Overview
 
-- **Secure MCP Server** with Asgardeo OAuth2 authentication
-- **Intelligent LangGraph Agent** with dynamic context management
-- **Multi-Pet Context Handling** with automatic pet selection logic
-- **JWT Token Validation** with JWKS endpoint integration
-- **OpenAI Integration** for AI-powered pet name suggestions
-- **RESTful Web Interface** with CORS support
-- **Real-time Chat** with conversation memory
+This project demonstrates a production-ready multi-agent architecture where:
+- **Orchestrator Agent** intelligently routes user requests to specialized agents using GPT-4o
+- **Vaccination Agent** provides AI-powered pet vaccination information using GPT-4o-mini
+- **Appointments Agent** manages veterinary appointment scheduling using GPT-3.5-turbo
+- **Asgardeo OAuth 2.0** secures all inter-agent communication with token exchange (RFC 8693)
 
-## Prerequisites
-
-- Python 3.12 or higher
-- **Asgardeo account** and application setup
-- OpenAI API key (for pet name suggestions)
-- pip (Python package installer)
-
-## Project Structure
+## 🏗️ Architecture
 
 ```
-├── main.py              # FastMCP server with secured endpoints
-├── agent.py            # LangGraph agent with dynamic context logic
-├── jwt_validator.py    # JWT validation module for Asgardeo tokens
-├── index.html          # Web interface for chat
-├── .env                # Environment variables configuration
-├── requirements.txt    # Python dependencies
-└── README.md          # This file
+┌─────────────────────────────────────────────────────────────┐
+│                         User                                 │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Orchestrator Agent (GPT-4o)                     │
+│  - User Authentication (Browser OAuth)                       │
+│  - Intelligent Request Routing                               │
+│  - Token Exchange (RFC 8693)                                 │
+│  - Response Synthesis                                        │
+└───────────┬─────────────────────────┬───────────────────────┘
+            │                         │
+            ▼                         ▼
+┌───────────────────────┐   ┌───────────────────────┐
+│ Vaccination Agent     │   │ Appointments Agent    │
+│ (GPT-4o-mini)         │   │ (GPT-3.5-turbo)      │
+│ - JWT Validation      │   │ - JWT Validation      │
+│ - LLM Processing      │   │ - LLM Processing      │
+│ Port: 10005           │   │ Port: 10006           │
+└───────────────────────┘   └───────────────────────┘
 ```
 
-## Installation
+## 📁 Project Structure
 
-1. **Clone or download this project**
+```
+PET_A2A-secure/
+├── config.json                 # Central configuration for all agents
+├── .env                        # Environment variables (secrets)
+├── README.md                   # This file
+│
+├── agents/                     # All agent implementations
+│   ├── orchestrator_agent/     # Main orchestrator
+│   │   ├── agent.py           # Orchestrator logic with LLM
+│   │   ├── browser_auth.py    # User authentication (OAuth PKCE)
+│   │   ├── token_exchange.py  # RFC 8693 token exchange
+│   │   ├── auth.py            # Authentication utilities
+│   │   └── requirements.txt
+│   │
+│   ├── vaccination_agent/      # Pet vaccination service
+│   │   ├── agent.py           # LLM-powered vaccination agent
+│   │   ├── executor.py        # A2A protocol handler
+│   │   ├── middleware.py      # JWT validation middleware
+│   │   ├── __main__.py        # Server entry point
+│   │   └── requirements.txt
+│   │
+│   └── appointments_agent/     # Appointment scheduling service
+│       ├── agent.py           # LLM-powered appointments agent
+│       ├── executor.py        # A2A protocol handler
+│       ├── middleware.py      # JWT validation middleware
+│       ├── __main__.py        # Server entry point
+│       └── requirements.txt
+│
+└── docs/                       # Documentation
+    ├── asgardeo-scope-configuration.md
+    └── sequence-diagram.md
+```
 
-2. **Create a virtual environment (recommended)**
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   ```
+## 🚀 Quick Start
 
-3. **Install required dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 1. Prerequisites
 
-   Key dependencies include:
-   - `fastmcp` - Fast MCP server framework
-   - `python-dotenv` - Environment variable management
-   - `openai` - OpenAI API integration
-   - `pyjwt` - JWT token handling
-   - `langgraph` - Agent orchestration
-   - `langchain-openai` - OpenAI LangChain integration
-   - `aiohttp` - Async HTTP server
-   - `httpx` - HTTP client
+- **Python 3.12+**
+- **Asgardeo Account** ([Sign up free](https://asgardeo.io/))
+- **OpenAI API Key** ([Get one here](https://platform.openai.com/api-keys))
 
-4. **Configure environment variables**
-   
-   Create a `.env` file in the project root directory:
-   
-   ```bash
-   # Asgardeo OAuth2 Configuration
+### 2. Installation
 
-   ## Asgardeo Configuration
+```powershell
+# Clone the repository
+git clone <repository-url>
+cd PET_A2A-secure
 
-   ## 1. Create an Asgardeo Application
+# Create virtual environment
+python -m venv .venv
+.venv\Scripts\Activate.ps1  # Windows PowerShell
 
-      1. Login to your [Asgardeo](https://asgardeo.io/) account.
-      2. Navigate to the **Applications** tab and select the **MCP Client Application**.
-      3. Add your application name and callback URL.
+# Install dependencies for all agents
+pip install -r agents/orchestrator_agent/requirements.txt
+pip install -r agents/vaccination_agent/requirements.txt
+pip install -r agents/appointments_agent/requirements.txt
+```
 
-   ## 2. Get Your Application Credentials
+### 3. Configure Asgardeo
 
-Once the application is created, get both the **Client ID** and **Tenant Name**:
+#### Create Applications in Asgardeo Console:
 
-* **Client ID**: Found in the application's **Protocol** tab.
-* **Tenant Name**: Your organization's tenant name (visible in the URL).
-   AUTH_ISSUER=https://api.asgardeo.io/t/<your-tenant>
-   CLIENT_ID=<your-client-id>
-   JWKS_URL=https://api.asgardeo.io/t/<your-tenant>/oauth2/jwks
-   
-   # OpenAI Configuration
-   OPENAI_API_KEY=<your-openai-api-key>
-   ```
-   
-   **Example with actual values:**
-   ```bash
-   # Asgardeo OAuth2 Configuration
-   AUTH_ISSUER=https://api.asgardeo.io/t/pawsomepets
-   CLIENT_ID=abc123xyz789_client_id_from_asgardeo
-   JWKS_URL=https://api.asgardeo.io/t/pawsomepets/oauth2/jwks
-   
-   # OpenAI Configuration
-   OPENAI_API_KEY=sk-proj-abc123xyz789
-   ```
+1. **Orchestrator Application** (Standard Web Application)
+   - Protocol: OAuth 2.0 / OpenID Connect
+   - Allowed Grant Types: Authorization Code, Token Exchange
+   - Callback URL: `http://localhost:8080/callback`
+   - Note the Client ID and Secret
 
-## 🔐 Asgardeo Configuration
+2. **Vaccination Agent Application** (M2M Application)
+   - Protocol: OAuth 2.0
+   - Allowed Grant Types: Client Credentials, Token Exchange
+   - Note the Client ID and Secret
 
-### 1. Create an MCP Client Application in Asgardeo
+3. **Appointments Agent Application** (M2M Application)
+   - Protocol: OAuth 2.0
+   - Allowed Grant Types: Client Credentials, Token Exchange
+   - Note the Client ID and Secret
 
-1. Login to your **Asgardeo** account at [https://console.asgardeo.io](https://console.asgardeo.io)
-2. Navigate to the **Applications** tab and select **MCP Client Application** template
+#### Create API Resource:
 
+1. Go to **API Resources** → **New API Resource**
+2. Identifier: `https://api.petclinic.com`
+3. Add Scopes:
+   - `vaccination:read` - Access vaccination information
+   - `appointments:read` - Access appointment scheduling
 
+#### Configure Trusted Token Issuer:
 
-3. Configure your application:
-   - **Application Name**: Pawsome Pet Care MCP
-   - **Authorized Redirect URLs**: Add the callback URL for your client application
-     - For MCP Inspector: `http://localhost:6274/oauth/callback`
-     - For the agent: `http://localhost:8080/callback`
+1. Go to **Connections** → **Trusted Token Issuer** → **New Trusted Token Issuer**
+2. Name: "Asgardeo Self"
+3. Issuer: `https://api.asgardeo.io/t/<your-org>/oauth2/token`
+4. Alias: `https://api.asgardeo.io/t/<your-org>/oauth2/token`
+5. JWKS Endpoint: `https://api.asgardeo.io/t/<your-org>/oauth2/jwks`
+6. **Account Linking**:
+   - Primary Lookup Attribute: `sub`
+   - Secondary Lookup Attribute: `email` (optional)
 
+### 4. Configure Environment Variables
 
-
-### 2. Get Your Application Credentials
-
-Once the application is created, retrieve the following:
-- **Client ID**: Found in the application's **Protocol** tab
-- **Tenant Name**: Your organization's tenant name (e.g., `pawsomepets`)
-
-### 3. Configure Required Scopes
-
-Ensure your Asgardeo application has the following scopes enabled:
-- `openid` - Standard OpenID Connect scope
-- `email` - User email address access
-- `profile` - User profile information
-- `internal_login` - Required for user authentication
-
-### 4. Update Environment Variables
-
-Replace the placeholders in your `.env` file:
-- Replace `<your-tenant>` with your actual Asgardeo tenant name
-- Replace `<your-client-id>` with your OAuth2 client ID from Asgardeo
-
-**Security Note**: Never commit your `.env` file to version control. Add `.env` to your `.gitignore` file.
-
-## Architecture Overview
-
-### MCP Server (`main.py`)
-
-The MCP server provides secured tools for pet management:
-
-1. **JWT Token Verification**
-   - Validates incoming tokens using Asgardeo JWKS endpoint
-   - Extracts user claims (subject, scopes, audience)
-   - Implements RFC 9728 Protected Resource Metadata
-
-2. **Available Tools**:
-   - `get_user_id_by_email` - Retrieves user ID from email
-   - `get_pets_by_user_id` - Lists all pets for a user
-   - `get_pet_vaccination_info` - Fetches vaccination history
-   - `book_vet_appointment` - Books veterinary appointments
-   - `cancel_appointment` - Cancels existing appointments
-   - `suggest_pet_names` - AI-powered pet name suggestions via OpenAI
-
-### LangGraph Agent (`agent.py`)
-
-The agent orchestrates intelligent conversations with dynamic context management:
-
-1. **Authentication Flow**
-   - Implements OAuth2 Authorization Code Flow with PKCE
-   - Automatically opens browser for Asgardeo login
-   - Retrieves user email from ID token and SCIM2/Me endpoint
-   - Exchanges authorization code for access token
-
-2. **State Management**
-   - Maintains conversation history per session
-   - Caches user context (user ID, pets, active pet)
-   - Dynamically resolves pet context from user messages
-
-3. **Graph Nodes**:
-   - `load_context` - Loads user data at conversation start
-   - `classify` - Determines user intent
-   - `mcp_agent` - Executes MCP tool calls with dynamic context
-   - `greeting`, `services`, `pricing`, `general` - Intent-specific handlers
-
-4. **Multi-Pet Logic**:
-   - Single pet: Automatic context selection
-   - Multiple pets: Detects pet names in messages or asks for clarification
-   - No pets: Informs user appropriately
-
-## Running the System
-
-### 1. Start the MCP Server
+Copy `.env.example` to `.env` and fill in your credentials:
 
 ```bash
-python main.py
+# Asgardeo Configuration
+ASGARDEO_TOKEN_URL=https://api.asgardeo.io/t/<your-org>/oauth2/token
+ASGARDEO_AUTHORIZE_URL=https://api.asgardeo.io/t/<your-org>/oauth2/authorize
+ASGARDEO_JWKS_URL=https://api.asgardeo.io/t/<your-org>/oauth2/jwks
+ASGARDEO_ISSUER=https://api.asgardeo.io/t/<your-org>
+
+# Orchestrator Application
+ASGARDEO_CLIENT_ID=<orchestrator-client-id>
+ASGARDEO_CLIENT_SECRET=<orchestrator-client-secret>
+
+# Vaccination Agent
+VACCINATION_APP_ID=<vaccination-client-id>
+VACCINATION_APP_SECRET=<vaccination-client-secret>
+VACCINATION_REQUIRED_SCOPE=vaccination:read
+
+# Appointments Agent
+APPOINTMENTS_APP_ID=<appointments-client-id>
+APPOINTMENTS_APP_SECRET=<appointments-client-secret>
+APPOINTMENTS_REQUIRED_SCOPE=appointments:read
+
+# API Resource
+API_RESOURCE_IDENTIFIER=https://api.petclinic.com
+
+# OpenAI
+OPENAI_API_KEY=<your-openai-api-key>
+
+# Enable/Disable Authentication
+ASGARDEO_AUTH_ENABLED=true
 ```
 
-The server will start on `http://localhost:8000` using `streamable-http` transport.
+### 5. Update config.json
 
-### 2. Start the Agent Server
+The `config.json` file contains centralized configuration for all agents. Update the `application_id` fields with your Asgardeo client IDs.
 
-```bash
+### 6. Run the System
+
+Open **three terminal windows**:
+
+**Terminal 1 - Vaccination Agent:**
+```powershell
+cd agents/vaccination_agent
+python __main__.py
+```
+
+**Terminal 2 - Appointments Agent:**
+```powershell
+cd agents/appointments_agent
+python __main__.py
+```
+
+**Terminal 3 - Orchestrator:**
+```powershell
+cd agents/orchestrator_agent
 python agent.py
 ```
 
-The agent will:
-1. Open your browser for Asgardeo authentication
-2. Wait for authorization callback
-3. Retrieve your user email
-4. Start the chat server on `http://localhost:8080`
+The orchestrator will:
+1. Open your browser for authentication
+2. Discover available agents
+3. Process your query using GPT-4o
+4. Route requests to appropriate agents
+5. Synthesize and return the final response
 
-### 3. Access the Web Interface
+## 🔐 Security Features
 
-Open `http://localhost:8080` in your browser to interact with the chatbot.
+### OAuth 2.0 Token Exchange (RFC 8693)
+- **User Authentication**: Browser-based login with PKCE flow
+- **Token Delegation**: Master token exchanged for agent-specific tokens
+- **Audience Isolation**: Each agent validates its unique audience claim
+- **Scope Validation**: Server-side scope verification via Trusted Token Issuer
 
-## Testing with MCP Inspector
+### JWT Validation
+- **Signature Verification**: Using Asgardeo's JWKS endpoint
+- **Expiration Checks**: Automatic token expiry validation
+- **Audience Matching**: Agent ID verification
+- **Issuer Validation**: Ensures tokens from trusted Asgardeo org
 
-### Setup MCP Inspector
+### Security Best Practices
+- ✅ No shared secrets between agents
+- ✅ Principle of least privilege (minimal scopes)
+- ✅ Token-based authentication for all agent communication
+- ✅ Centralized identity management via Asgardeo
 
-1. **Install and run MCP Inspector**:
-   ```bash
-   npx @modelcontextprotocol/inspector
-   ```
-   
-   **Note**: Ensure version `0.16.3` or higher.
+## ⚙️ Configuration Options
 
-2. **Configure Inspector Callback**:
-   - Add `http://localhost:6274/oauth/callback` to your Asgardeo application's authorized redirect URLs
+### Agent Configuration (config.json)
 
-3. **Connect to MCP Server**:
-   - Open the Inspector URL (e.g., `http://localhost:6274/?MCP_PROXY_AUTH_TOKEN=<token>`)
-   - Configure the server connection:
-     - **Transport**: HTTP SSE
-     - **URL**: `http://localhost:8000/mcp`
-     - **Auth**: OAuth2 with Asgardeo settings
+| Field | Description | Example |
+|-------|-------------|---------|
+| `name` | Unique agent identifier | `"vaccination_agent"` |
+| `type` | Agent type (`orchestrator` or `service`) | `"service"` |
+| `enabled` | Enable/disable agent | `true` |
+| `host` | Server host | `"localhost"` |
+| `port` | Server port | `10005` |
+| `application_id` | Asgardeo client ID | `"abc123..."` |
+| `required_scope` | Required OAuth scope | `"vaccination:read"` |
+| `llm.model` | OpenAI model name | `"gpt-4o-mini"` |
+| `llm.temperature` | LLM creativity (0-1) | `0.5` |
+| `logging.level` | Log level | `"INFO"` |
 
+### Logging Levels
 
-4. **Test Authentication**:
-   - Click **Connect**
-   - You'll be redirected to Asgardeo for login
-   - After successful authentication, you can test the tools
+Set log levels in `config.json` to control verbosity:
+- `"DEBUG"` - Detailed debugging information
+- `"INFO"` - General informational messages (default)
+- `"WARNING"` - Warning messages only
+- `"ERROR"` - Error messages only
+- `"CRITICAL"` - Critical errors only
 
-  
+### LLM Model Selection
 
-## Sample Conversation Flows
+Each agent can use a different LLM model:
+- **Orchestrator**: `gpt-4o` - Best for complex reasoning and routing
+- **Vaccination Agent**: `gpt-4o-mini` - Cost-effective for specialized tasks
+- **Appointments Agent**: `gpt-3.5-turbo` - Fast responses for simple queries
 
-### Example 1: Single Pet User
+## 🧪 Testing
+
+### Test Individual Agents:
+
+**Vaccination Agent:**
+```powershell
+cd agents/vaccination_agent
+python __main__.py
 ```
-User: Hi!
-Agent: Welcome back! I've loaded your pet details. How can I help?
+Visit: `http://localhost:10005/.well-known/agent-card.json`
 
-User: What are Buddy's vaccinations?
-Agent: [Automatically calls get_pet_vaccination_info with Buddy's ID]
-       Buddy's vaccination records show:
-       - Rabies (Jan 15, 2024) - Next due: Jan 15, 2025
-       - DHPP (Mar 20, 2024) - Next due: Mar 20, 2025
-       - Bordetella (Jun 10, 2024) - Upcoming: Dec 10, 2024
+**Appointments Agent:**
+```powershell
+cd agents/appointments_agent
+python __main__.py
 ```
+Visit: `http://localhost:10006/.well-known/agent-card.json`
 
-### Example 2: Multiple Pet User
+## 📝 Example Usage
+
 ```
-User: Show me vaccination info
-Agent: Which pet are you referring to? You have:
-       - Buddy (Dog)
-       - Spot (Dog)
+User Query: "I need to check vaccination requirements for my dog, 
+            and then check if Dr. Smith is free for an appointment."
 
-User: Buddy
-Agent: [Calls get_pet_vaccination_info with Buddy's ID]
-       [Returns vaccination details...]
-```
-
-### Example 3: Booking Appointment
-```
-User: Book an appointment for Buddy next Monday at 2 PM for checkup
-Agent: [Calls book_vet_appointment]
-       Appointment confirmed!
-       - Pet: Buddy
-       - Date: 2025-11-24
-       - Time: 2:00 PM
-       - Reason: Checkup
-       - Veterinarian: Dr. Smith
-```
-
-## Security Features
-
-1. **JWT Token Validation**
-   - Validates tokens against Asgardeo JWKS endpoint
-   - Verifies issuer, audience, and expiration
-   - Extracts and validates scopes
-
-2. **Authorization Flow**
-   - OAuth2 Authorization Code Flow with PKCE
-   - Secure token exchange
-   - No client secret required (PKCE protects public clients)
-
-3. **Scope-Based Access Control**
-   - Tools require valid access tokens
-   - Future enhancement: Scope-specific tool access
-
-4. **User Context Isolation**
-   - Each user sees only their own pets
-   - Session-based conversation memory
-   - Context caching per session ID
-
-## Troubleshooting
-
-### Email Not Retrieved from ID Token
-
-The agent includes fallback logic to retrieve email from SCIM2/Me endpoint if not present in ID token:
-
-```python
-# Fallback to SCIM2/Me endpoint
-scim_url = f"{base_url}/scim2/Me"
-scim_resp = await client.get(
-    scim_url,
-    headers={"Authorization": f"Bearer {access_token}"}
-)
+Orchestrator (GPT-4o):
+  ├─ Analyzes query (identifies two sub-tasks)
+  ├─ Calls Vaccination Agent with "dog vaccination requirements"
+  │   └─ Returns: Vaccination schedule for dogs
+  ├─ Calls Appointments Agent with "Dr. Smith availability"
+  │   └─ Returns: Dr. Smith's available slots
+  └─ Synthesizes: Complete response combining both answers
 ```
 
-### Token Validation Failures
+## 🐛 Troubleshooting
 
-Check the following:
-- JWKS URL is correct and accessible
-- Issuer URL matches exactly (including tenant)
-- Client ID is correct
-- Token has not expired
+### Token Exchange Fails
+**Error:** `"Configured lookup attributes not found in the subject token"`
 
-### Connection Issues
+**Solution:** 
+1. Verify Trusted Token Issuer configuration
+2. Set Primary Lookup Attribute to `sub`
+3. Ensure user has logged in successfully
 
-- Ensure MCP server is running on `http://localhost:8000`
-- Verify agent server is running on `http://localhost:8080`
-- Check firewall settings for local ports
+### Agent Not Discovered
+**Error:** `Agent not found` or `Connection refused`
 
-## Advanced Configuration
+**Solution:**
+1. Check agent is running on correct port
+2. Verify `config.json` has correct host/port
+3. Check firewall settings
 
-### Custom Port Configuration
+### LLM Not Responding
+**Error:** `OpenAI API error` or `LLM service not available`
 
-Modify port settings in the respective files:
+**Solution:**
+1. Verify `OPENAI_API_KEY` in `.env`
+2. Check OpenAI API quota/billing
+3. Verify internet connection
 
-**MCP Server** (`main.py`):
-```python
-mcp.run(transport="streamable-http", port=8000)
-```
+### Authentication Disabled
+**Warning:** `Authentication disabled`
 
-**Agent Server** (`agent.py`):
-```python
-site = web.TCPSite(runner, 'localhost', 8080)
-```
+**Cause:** Missing Asgardeo configuration in `.env`
 
-### Adding New Tools
+**Solution:** Set all required `ASGARDEO_*` environment variables
 
-To add new MCP tools:
+## 📚 Documentation
 
-1. Define the tool in `main.py`:
-```python
-@mcp.tool()
-async def my_new_tool(param: str) -> dict:
-    """Tool description"""
-    # Implementation
-    return {"result": "data"}
-```
+- [Asgardeo Scope Configuration](docs/asgardeo-scope-configuration.md)
+- [Sequence Diagram](docs/sequence-diagram.md)
+- [OAuth 2.0 Token Exchange (RFC 8693)](https://datatracker.ietf.org/doc/html/rfc8693)
+- [Asgardeo Documentation](https://wso2.com/asgardeo/docs/)
 
-2. The agent will automatically discover and use the new tool.
+## 📄 License
 
-## Contributing
-
-Contributions are welcome! Please ensure:
-- Code follows PEP 8 style guidelines
-- All new tools include proper authentication checks
-- Documentation is updated for new features
-
-## License
-
-This project is provided as-is for demonstration purposes.
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ---
 
-**Powered by Asgardeo** - Enterprise-grade identity and access management for modern applications.
+**Built with ❤️ for secure, intelligent multi-agent systems**
