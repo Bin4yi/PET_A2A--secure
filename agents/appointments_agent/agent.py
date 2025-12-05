@@ -23,7 +23,7 @@ for _ in range(5):
 # ============================================================================
 
 class AppointmentAgent:
-    """Agent that manages appointment bookings using LLM."""
+    """Agent that manages appointment bookings using ."""
 
     SUPPORTED_CONTENT_TYPES = ['text', 'text/plain']
 

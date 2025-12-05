@@ -1,6 +1,6 @@
 # 🐾 Pet Care Multi-Agent System with Asgardeo Authentication
 
-A sophisticated multi-agent orchestration system for pet care services, featuring secure OAuth 2.0 token exchange via Asgardeo, LLM-powered agents, and intelligent request routing.
+A multi-agent orchestration system for pet care services, featuring secure OAuth 2.0 token exchange via Asgardeo, AI agents, and intelligent request routing.
 
 ## 🌟 Overview
 
